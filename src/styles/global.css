@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== CSS Variables (ported from your CSS) ===== */
+:root {
+  --background-primary: #181a1b;
+  --background-secondary: #232324;
+  --sidebar-background: #1c1e20;
+  --text-primary: #fff;
+  --text-secondary: #b0b3b8;
+  --border-color: #444;
+  --accent-color: #00bcd4; /* thumbs up, hover, etc */
+  --error-color: #f44336;  /* thumbs down */
+  --input-background: #232324;
+  --input-text: #fff;
+  --chat-bubble-user-bg: #06abea;
+  --chat-bubble-bot-bg: #232324;
+  --chat-bubble-user-text: #fff;
+  --chat-bubble-bot-text: #ececec;
+}
+
+/* Light theme overrides */
+html[data-theme='light'] {
+  --background-primary: #f0f2f5;
+  --background-secondary: #ffffff;
+  --sidebar-background: #e0e2e5;
+  --text-primary: #333;
+  --text-secondary: #666;
+  --border-color: #ccc;
+  --accent-color: #007bff;
+  --error-color: #dc3545;
+  --input-background: #f8f8f8;
+  --input-text: #333;
+  --chat-bubble-user-bg: #007bff;
+  --chat-bubble-bot-bg: #e9ecef;
+  --chat-bubble-user-text: #fff;
+  --chat-bubble-bot-text: #333;
+}
+
+/* Accessibility-friendly Related topics in LIGHT mode */
+html[data-theme='light'] .recq-header {
+  background: #e6f4ff;
+  color: var(--text-primary);
+}
+html[data-theme='light'] .recq-row {
+  background: #f5faff;
+  color: var(--text-primary);
+  border-top: 1px solid #cce4ff;
+}
+html[data-theme='light'] .recq-row:hover,
+html[data-theme='light'] .recq-row:focus {
+  background: #d6ecff;
+}
+html[data-theme='light'] .recq-plus { color: #007bff; }
+html[data-theme='light'] .recq-row:hover .recq-plus,
+html[data-theme='light'] .recq-row:active .recq-plus { color: #0056b3; }
+
+/* Smooth fonts & base */
+html, body, #root { height: 100%; }
+body { font-family: Inter, Segoe UI, Arial, sans-serif; }
+
+/* Hide scrollbars for specific areas if needed */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { scrollbar-width: none; }
