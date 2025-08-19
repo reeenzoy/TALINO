@@ -56,10 +56,9 @@ export default function AuthedApp() {
 
   const suggestionButtons = useMemo(
     () => [
-      "Ask for DOST Science Projects Budget",
-      "Show total investment by region",
-      "Pie chart of project types",
-      "Bar chart: budget by year",
+      "Who is DOST?",
+      "What are the technologies of DOST?",
+      "Services of DOST",
     ],
     []
   );
@@ -192,14 +191,14 @@ export default function AuthedApp() {
       <main className="min-h-svh bg-bgp text-textp">
         <div className="flex">
           <Sidebar />
-          <div className="min-w-0 flex-1">
-            <header className="sticky top-0 z-10 border-b border-borderc bg-bgp/60 backdrop-blur">
-              <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-texts">TALINO.AI</span>
+          <div className="min-w-0 flex-1 flex flex-col">
+            <header className="sticky top-0 z-10 bg-bgp/60 backdrop-blur">
+              <div className="mx-auto flex h-14 w-full items-center justify-between px-4">
+                <div className="flex items-center gap-2 justify-start">
+                  <span className="text-xl font-semibold text-texts">TALINO</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <select
+                  {/* <select
                     value={theme}
                     onChange={(e) => setTheme(e.target.value)}
                     className="rounded-md border border-borderc bg-bgs px-2 py-1 text-sm text-textp"
@@ -208,21 +207,20 @@ export default function AuthedApp() {
                     <option value="system">System</option>
                     <option value="light">Light</option>
                     <option value="dark">Dark</option>
-                  </select>
-                  <button
+                  </select> */}
+
+                  {/* Refresh Page */}
+
+                  {/* <button
                     className="rounded-md border border-borderc bg-bgs px-2 py-1 text-sm text-texts hover:bg-bgs/60"
                     onClick={() => location.reload()}
                     title="Reload"
                   >
                     ↻
-                  </button>
+                  </button> */}
                   {user ? (
-                    <button
-                      onClick={logout}
-                      className="rounded-md border border-borderc bg-bgs px-2 py-1 text-sm text-texts hover:bg-bgs/60"
-                      title={`Sign out ${user.email}`}
-                    >
-                      Logout
+                    <button>
+                      
                     </button>
                   ) : (
                     <button
@@ -237,49 +235,52 @@ export default function AuthedApp() {
               </div>
             </header>
 
-            <section className="mx-auto grid w-full max-w-5xl grid-rows-[1fr_auto] gap-4 px-4 pb-6 pt-6">
-              <div className="mx-auto w-full max-w-3xl">
-                {messages.filter((m) => m.role === USER).length === 0 ? (
-                  <>
-                    <div className="mb-6 text-center">
-                      <div className="mx-auto mb-2 inline-grid place-items-center">
-                        <div className="h-[75px] w-[75px] rounded-full bg-bgs shadow-card" />
+            <section className="mx-auto grid w-full max-w-5xl flex-1 grid-rows-[1fr_auto] gap-4 px-4 pb-6">
+              <div className="flex justify-center w-full flex-1 px-4 items-start">
+                <div className="w-full max-w-3xl text-center">
+                  {messages.filter((m) => m.role === USER).length === 0 ? (
+                    <>
+                      <div className="mb-6">
+                        <div className="mx-auto mb-2 inline-grid place-items-center">
+                          <div className="h-[80px] w-[80px] rounded-full flex items-center justify-center overflow-hidden">
+                            <img 
+                              src="/logo.png" 
+                              alt="TALINO AI Logo" 
+                              className="h-full w-full object-contain"
+                            />
+                          </div>
+                        </div>
+                        <div className="text-xl font-bold text-textp">Welcome to TALINO.AI</div>
+                        <div className="mt-2 text-[1.05rem] font-medium italic text-accent">
+                          Science and Technology Within Everyone’s Reach
+                        </div>
                       </div>
-                      <div className="text-xl font-bold text-textp">Welcome to TALINO.AI</div>
-                      <div className="mt-2 text-[1.05rem] font-medium italic text-accent">
-                        Science and Technology Within Everyone’s Reach
-                      </div>
-                    </div>
-                    <Composer
-                      value={input}
-                      onChange={setInput}
-                      onSubmit={sendMessage}
-                      isLoading={false}
-                      isGenerating={isGenerating}
-                      onStop={handleStop}
+
+                      <Composer
+                        value={input}
+                        onChange={setInput}
+                        onSubmit={sendMessage}
+                        isLoading={false}
+                        isGenerating={isGenerating}
+                        onStop={handleStop}
+                      />
+
+                      {!hasInteracted && <PromptChips items={suggestionButtons} onPick={pickPrompt} />}
+                    </>
+                  ) : (
+                    <MessageList
+                      items={messages}
+                      recLoading={recLoading}
+                      related={related}
+                      onPickRelated={(q) => {
+                        setInput(q);
+                        setTimeout(() => sendMessage(), 10);
+                      }}
+                      feedbacks={feedbacks}
+                      onFeedback={handleFeedback}
                     />
-                    {!hasInteracted && <PromptChips items={suggestionButtons} onPick={pickPrompt} />}
-                    <div className="mt-8 flex flex-col items-center">
-                      <p className="text-sm text-texts">In partnership with</p>
-                      <div className="mt-2 flex gap-8">
-                        <div className="h-[60px] w-[60px] rounded bg-bgs" title="ASTI" />
-                        <div className="h-[60px] w-[60px] rounded bg-bgs" title="CSU" />
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <MessageList
-                    items={messages}
-                    recLoading={recLoading}
-                    related={related}
-                    onPickRelated={(q) => {
-                      setInput(q);
-                      setTimeout(() => sendMessage(), 10);
-                    }}
-                    feedbacks={feedbacks}
-                    onFeedback={handleFeedback}
-                  />
-                )}
+                  )}
+                </div>
               </div>
 
               {messages.length > 0 && (
@@ -293,6 +294,38 @@ export default function AuthedApp() {
                     onStop={handleStop}
                   />
                 </div>
+              )}
+              {/* Footer (bottom of the right column) */}
+              {messages.filter((m) => m.role === USER).length === 0 && (
+                <footer>
+                  <div className="mx-auto w-full max-w-5xl px-4">
+                    <div className="flex flex-col items-center">
+                      <p className="text-sm text-texts">In partnership with</p>
+                      <div className="mt-2 flex gap-8">
+                        <div
+                          className="h-[60px] w-[60px]"
+                          title="Advanced Science and Technology Institute (ASTI)"
+                        >
+                          <img 
+                            src="/asti.png" 
+                            alt="ASTI Logo" 
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                        <div
+                          className="h-[70px] w-[70px]"
+                          title="Caraga State University"  
+                        >
+                          <img 
+                            src="/csu.png" 
+                            alt="CSU Logo" 
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </footer>
               )}
             </section>
           </div>
