@@ -32,7 +32,6 @@ export default function AuthedApp() {
 
   // Auth
   const { user, logout } = useAuth();
-  // ⬅️ Do NOT gate the app here (no if (!ready) or if (!user) returns)
 
   // Theme
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "system");
@@ -186,41 +185,28 @@ export default function AuthedApp() {
     setHasInteracted(false);
   };
 
+  const isWelcome = messages.filter((m) => m.role === USER).length === 0;
+
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>
       <main className="min-h-svh bg-bgp text-textp">
         <div className="flex">
-          <Sidebar />
+          <Sidebar onOpenAuth={() => setShowAuth(true)} />
           <div className="min-w-0 flex-1 flex flex-col">
+            {/* Header */}
             <header className="sticky top-0 z-10 bg-bgp/60 backdrop-blur">
               <div className="mx-auto flex h-14 w-full items-center justify-between px-4">
                 <div className="flex items-center gap-2 justify-start">
                   <span className="text-xl font-semibold text-texts">TALINO</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  {/* <select
-                    value={theme}
-                    onChange={(e) => setTheme(e.target.value)}
-                    className="rounded-md border border-borderc bg-bgs px-2 py-1 text-sm text-textp"
-                    title="Theme"
-                  >
-                    <option value="system">System</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select> */}
-
-                  {/* Refresh Page */}
-
-                  {/* <button
-                    className="rounded-md border border-borderc bg-bgs px-2 py-1 text-sm text-texts hover:bg-bgs/60"
-                    onClick={() => location.reload()}
-                    title="Reload"
-                  >
-                    ↻
-                  </button> */}
+                {/* <div className="flex items-center gap-2">
                   {user ? (
-                    <button>
-                      
+                    <button
+                      onClick={logout}
+                      className="rounded-md border border-borderc bg-bgs px-2 py-1 text-sm text-textp hover:bg-bgs/60"
+                      title="Logout"
+                    >
+                      Logout
                     </button>
                   ) : (
                     <button
@@ -231,21 +217,23 @@ export default function AuthedApp() {
                       Login / Register
                     </button>
                   )}
-                </div>
+                </div> */}
               </div>
             </header>
 
+            {/* Content */}
             <section className="mx-auto grid w-full max-w-5xl flex-1 grid-rows-[1fr_auto] gap-4 px-4 pb-6">
               <div className="flex justify-center w-full flex-1 px-4 items-start">
-                <div className="w-full max-w-3xl text-center">
-                  {messages.filter((m) => m.role === USER).length === 0 ? (
+                {/* ⬇️ wrapper: welcome is centered; chat is full width & left/justified */}
+                <div className={isWelcome ? "w-full max-w-3xl text-center" : "w-full max-w-none"}>
+                  {isWelcome ? (
                     <>
                       <div className="mb-6">
                         <div className="mx-auto mb-2 inline-grid place-items-center">
                           <div className="h-[80px] w-[80px] rounded-full flex items-center justify-center overflow-hidden">
-                            <img 
-                              src="/logo.png" 
-                              alt="TALINO AI Logo" 
+                            <img
+                              src="/logo.png"
+                              alt="TALINO AI Logo"
                               className="h-full w-full object-contain"
                             />
                           </div>
@@ -265,7 +253,15 @@ export default function AuthedApp() {
                         onStop={handleStop}
                       />
 
-                      {!hasInteracted && <PromptChips items={suggestionButtons} onPick={pickPrompt} />}
+                      {!hasInteracted && (
+                        <PromptChips
+                          items={suggestionButtons}
+                          onPick={(t) => {
+                            setInput(t);
+                            setTimeout(() => sendMessage(), 10);
+                          }}
+                        />
+                      )}
                     </>
                   ) : (
                     <MessageList
@@ -295,8 +291,9 @@ export default function AuthedApp() {
                   />
                 </div>
               )}
-              {/* Footer (bottom of the right column) */}
-              {messages.filter((m) => m.role === USER).length === 0 && (
+
+              {/* Footer (only on welcome) */}
+              {isWelcome && (
                 <footer>
                   <div className="mx-auto w-full max-w-5xl px-4">
                     <div className="flex flex-col items-center">
@@ -306,19 +303,19 @@ export default function AuthedApp() {
                           className="h-[60px] w-[60px]"
                           title="Advanced Science and Technology Institute (ASTI)"
                         >
-                          <img 
-                            src="/asti.png" 
-                            alt="ASTI Logo" 
+                          <img
+                            src="/asti.png"
+                            alt="ASTI Logo"
                             className="h-full w-full object-contain"
                           />
                         </div>
                         <div
                           className="h-[70px] w-[70px]"
-                          title="Caraga State University"  
+                          title="Caraga State University"
                         >
-                          <img 
-                            src="/csu.png" 
-                            alt="CSU Logo" 
+                          <img
+                            src="/csu.png"
+                            alt="CSU Logo"
                             className="h-full w-full object-contain"
                           />
                         </div>
@@ -331,7 +328,7 @@ export default function AuthedApp() {
           </div>
         </div>
 
-        {/* Auth modal (optional login) */}
+        {/* Auth modal */}
         {!user && showAuth && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
             <div className="relative w-full max-w-sm">

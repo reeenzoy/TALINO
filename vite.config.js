@@ -5,8 +5,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Send only auth routes to the auth server
-      '/api/auth': { target: 'http://localhost:8001', changeOrigin: true }
-    }
-  }
+      // Auth server (your Express + Prisma on :8001)
+      '/api/auth': { target: 'http://localhost:8001', changeOrigin: true },
+
+      // RAG API (FastAPI on :8000)
+      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+    },
+  },
 });
