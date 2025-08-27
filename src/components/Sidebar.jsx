@@ -2,19 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 
 import {
-  RiHome2Line,
-  RiAddLine,
-  RiUser3Line,
-  RiBook2Line,
-  RiSettings3Line,
-  RiLogoutBoxRLine,
-  RiSunLine,
-  RiMoonLine,
-  RiContrast2Line,
+  RiHome2Line, RiAddLine, RiUser3Line, RiBook2Line,
+  RiSettings3Line, RiLogoutBoxRLine, RiSunLine, RiMoonLine, RiContrast2Line,
 } from "react-icons/ri";
 
 /** Narrow rail that expands on hover (desktop). */
-export default function Sidebar({ onOpenAuth }) {
+export default function Sidebar({
+  onOpenAuth,
+  conversations = [],          // ✅ safe default
+  onOpenConversation,          // ✅ callback to open a convo
+}) {
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
@@ -76,11 +73,22 @@ export default function Sidebar({ onOpenAuth }) {
 
       {/* Expanded panels */}
       <div className="mt-2 px-2 opacity-0 pointer-events-none translate-x-2 transition-all duration-300 group-hover/aside:opacity-100 group-hover/aside:pointer-events-auto group-hover/aside:translate-x-0">
-        <Section title="History" icon={<RiBook2Line />} add>
-          <PlainLink text="Who is DOST?" />
-          <PlainLink text="what are the technologies of DOST?" />
-          <PlainLink text="Services of DOST" />
-        </Section>
+        <Section title="History" icon={<RiBook2Line />}>
+        {Array.isArray(conversations) && conversations.length > 0 ? (
+          conversations.map(c => (
+            <button
+              key={c.id}
+              onClick={() => onOpenConversation?.(c.id)}
+              className="block w-full truncate text-left rounded-lg px-2 py-1.5 text-sm text-textp hover:bg-bgp/40"
+              title={c.title}
+            >
+              {c.title}
+            </button>
+          ))
+        ) : (
+          <span className="block px-2 py-1.5 text-sm text-texts/70">No conversations</span>
+        )}
+      </Section>
       </div>
 
       {/* Bottom actions */}
