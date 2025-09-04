@@ -8,6 +8,7 @@ import {
   useContext,
 } from "react";
 import axios from "axios";
+import { RiMenuLine } from "react-icons/ri";
 
 import { useAuth } from "./auth/AuthProvider";
 import AuthPage from "./pages/AuthPage";
@@ -49,6 +50,9 @@ export default function AuthedApp() {
 
   const { user, logout } = useAuth();
 
+  const scrollRef = useRef(null);
+  const [isPinned, setIsPinned] = useState(true);
+
   // ✅ mobile drawer — declare ONCE
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -75,7 +79,26 @@ export default function AuthedApp() {
 
   // default suggestions
   const suggestionButtons = useMemo(
-    () => ["Who is DOST?", "What are the technologies of DOST?", "Services of DOST"],
+    () => [
+      {
+        title: "Technologies",
+        subtitle: "DOST research programs and innovations",
+        value: "Give me some of the DOST technologies",
+        icon: "🤖",
+      },
+      {
+        title: "Programs and Projects",
+        subtitle: "Empowering research and industries",
+        value: "What programs and projects can help MSMEs?",
+        icon: "🗃️",
+      },
+      {
+        title: "Services",
+        subtitle: "Delivering through science and technology",
+        value: "What testing services does DOST offer?",
+        icon: "🏛️",
+      },
+    ],
     []
   );
 
@@ -99,6 +122,20 @@ export default function AuthedApp() {
       setRecLoading(false);
     }
   };
+
+  // Push /app/conversations/:id into the location bar (SPA-only route)
+  const navigateToConversation = useCallback((id, { replace = false } = {}) => {
+   const url = new URL(window.location.href);
+    url.pathname = `/${id}`;                 // ✅ root-level path
+    if (replace) window.history.replaceState({}, "", url);
+    else window.history.pushState({}, "", url);
+  }, []);
+
+  const navigateToRoot = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.pathname = `/`;                      // ✅ root/home
+    window.history.pushState({}, "", url);
+  }, []);
 
   // --- HISTORY: load after login
   useEffect(() => {
@@ -149,23 +186,102 @@ export default function AuthedApp() {
     [conversationId, user]
   );
 
+  useEffect(() => {
+    const el = document.getElementById("message-scroll");
+    if (!el) return;
+    const onScroll = () => {
+      const threshold = 64; // px from bottom counts as “pinned”
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+      setIsPinned(atBottom);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!isPinned) return;
+    const el = document.getElementById("message-scroll");
+    el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages.length, isGenerating, isPinned]);
+
+  function normalizeConversation(items = []) {
+  // Keep only user/assistant
+  const clean = items.filter(
+    (m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string"
+  );
+
+  // 1) Drop leading assistants (historical "welcome" bubbles)
+  let start = 0;
+  while (start < clean.length && clean[start].role === "assistant") start++;
+  const trimmed = clean.slice(start);
+
+  // 2) Merge consecutive same-role messages to keep a clean alternation
+  const merged = [];
+  for (const m of trimmed) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === m.role) {
+      last.content = `${last.content}\n\n${m.content}`.trim();
+    } else {
+      merged.push({ role: m.role, content: m.content });
+    }
+  }
+  return merged;
+}
+
   // --- open a conversation from the sidebar
   const openConversation = useCallback(async (id) => {
+    // Stop any ongoing generation/interval from the previous thread
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (streamIntervalRef.current) {
+      clearInterval(streamIntervalRef.current);
+      streamIntervalRef.current = null;
+    }
+    setIsGenerating(false);
+    // reflect in URL immediately (optimistic) so users can copy/share/bookmark
+    navigateToConversation(id);
     setConversationId(id);
     setSessionId(id); // align memory
     try {
       const { data } = await axios.get(`/api/app/conversations/${id}/messages`);
       const items = Array.isArray(data.items) ? data.items : [];
-      setMessages(
-        items.map((m) => ({
-          role: m.role === "assistant" ? "assistant" : "user",
-          content: m.content,
-        }))
-      );
+      const normalized = normalizeConversation(items);
+      setMessages(normalized);
     } catch {
       setMessages([]);
     }
-  }, []);
+  }, [navigateToConversation]);
+
+  useEffect(() => {
+    if (!user) return; // only after we know the user
+    const m = window.location.pathname.match(
+      /^\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
+    );
+    const id = m?.[1];
+      if (id && id !== conversationId) {
+        openConversation(id);
+    }
+  }, [user, conversationId, openConversation]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const m = window.location.pathname.match(
+        /^\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
+      );
+      const id = m?.[1];
+      if (id) {
+        if (id !== conversationId) openConversation(id);
+      } else {
+        // no id in URL => go to a fresh “root” view
+        if (conversationId) {
+          setConversationId(null);
+          setMessages([]);
+        }
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [conversationId, openConversation]);
 
   // fake streaming (typing effect)
   const streamBotMessage = (fullMsg, botMsgIndex, onDone) => {
@@ -193,8 +309,8 @@ export default function AuthedApp() {
   };
 
   // --- SEND: call FastAPI then persist to Express/Prisma
-  const sendMessage = useCallback(async () => {
-    const prompt = input;
+  const sendMessage = useCallback(async (explicit) => {
+    const prompt = explicit ?? input;
     if (!prompt.trim() || isGenerating) return;
 
     // if logged out, allow chatting but show login modal for saving
@@ -329,7 +445,8 @@ export default function AuthedApp() {
     setRelated([]);
     setFeedbacks({});
     setHasInteracted(false);
-  }, []);
+    navigateToRoot();
+  }, [navigateToRoot]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>
@@ -344,6 +461,7 @@ export default function AuthedApp() {
             onOpenAuth={() => setShowAuth(true)}
             conversations={conversations}
             onOpenConversation={openConversation}
+            onNewChat={resetChat}
           />
         </div>
 
@@ -364,9 +482,9 @@ export default function AuthedApp() {
                   onClick={() => setMobileNavOpen(true)}
                   aria-label="Open menu"
                 >
-                  <i className="fa-solid fa-bars" />
+                  <RiMenuLine className="text-xl" aria-hidden="true" />
                 </button>
-                <span className="text-xl font-bold text-texts">TALINO</span>
+                <span className="text-xl font-bold text-texts">TALINO AI</span>
               </div>
               <div className="flex items-center gap-2">
                 {/* right actions (optional) */}
@@ -375,8 +493,12 @@ export default function AuthedApp() {
           </header>
 
           {/* The rest of the main content that should not move */}
-          <section className="mx-auto w-full max-w-5xl flex-1 min-h-0 px-4 pb-0 flex flex-col">
-            <div className="flex w-full flex-1 min-w-0 min-h-0 items-start justify-center px-4">
+          <section
+            id="message-scroll"
+            className="mx-auto w-full max-w-5xl flex-1 min-h-0 mt-0 md:mt-20 px-4 pb-[var(--composer-h)] overflow-y-auto scroll-smooth flex flex-col"
+            style={{ ['--composer-h']: '112px' }}
+          >
+             <div className="flex w-full flex-1 min-w-0 min-h-0 items-start justify-center px-4">
               <div className={isWelcome ? "w-full max-w-3xl text-center" : "w-full max-w-none"}>
                 {isWelcome ? (
                   <>
@@ -400,6 +522,7 @@ export default function AuthedApp() {
                         isLoading={false}
                         isGenerating={isGenerating}
                         onStop={handleStop}
+                        autoFocus
                       />
                     </div>
                     {/* Suggestions under textarea */}
@@ -414,33 +537,46 @@ export default function AuthedApp() {
                     items={messages}
                     recLoading={recLoading}
                     related={related}
-                    onPickRelated={(q) => {
-                      setInput(q);
-                      setTimeout(() => sendMessage(), 10);
-                    }}
+                    onPickRelated={(q) => { setInput(q); setTimeout(() => sendMessage(), 10); }}
                     feedbacks={feedbacks}
                     onFeedback={(i, v) => setFeedbacks((p) => ({ ...p, [i]: v }))}
                   />
                 )}
               </div>
             </div>
+            <div aria-hidden className="h-[var(--composer-h)]" />
           </section>
+
+          {!isPinned && !isWelcome && (
+            <button
+              onClick={() => {
+                const el = document.getElementById("message-scroll");
+                el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+              }}
+              className="fixed bottom-[calc(var(--composer-h)+16px)] right-4 z-30 rounded-full border border-borderc bg-bgs px-3 py-1.5 text-xs shadow hover:bg-bgp"
+              aria-label="Jump to latest"
+            >
+              New messages ↓
+            </button>
+          )}
 
           {/* Fixed composer at bottom after first interaction */}
           {!isWelcome && (
-            <div className={`fixed bottom-0 left-0 right-0 bg-bgp pb-6 px-4 transition-all duration-300 ${sidebarWidth === "w-[260px]" ? "md:left-[260px]" : "md:left-12"}`}>
+            <div className={`fixed bottom-0 left-0 right-0 bg-bgp px-4 transition-all duration-300 ${sidebarWidth === "w-[260px]" ? "md:left-[260px]" : "md:left-12"}`} 
+            style={{ ['--composer-h']: '112px' }}
+            > 
               <div className="mx-auto w-full max-w-3xl transition-all duration-300 ease-in-out">
                 <Composer
+                  key={conversationId || 'new'}
                   value={input}
                   onChange={setInput}
                   onSubmit={sendMessage}
                   isLoading={false}
                   isGenerating={isGenerating}
                   onStop={handleStop}
+                  autoFocus
                 />
-                <p className="mt-2 font-bold text-center text-xs text-texts">
-                  TALINO.AI can make mistakes. Check important information.
-                </p>
+                <p className="mt-2 pb-4 font-bold text-center text-xs text-texts">TALINO.AI can make mistakes. Check important information.</p>
               </div>
             </div>
           )}
@@ -456,6 +592,7 @@ export default function AuthedApp() {
                 onOpenAuth={() => { setShowAuth(true); setMobileNavOpen(false); }}
                 conversations={conversations}
                 onOpenConversation={(id) => { openConversation(id); setMobileNavOpen(false); }}
+                onNewChat={() => { resetChat(); setMobileNavOpen(false); }}
               />
             </div>
           </div>

@@ -7,11 +7,12 @@ import {
 
 /** Narrow rail (desktop) that can also render as a full drawer (mobile). */
 export default function Sidebar({
-  onOpenAuth,
-  conversations = [],
-  onOpenConversation,
-  variant = "rail",
-}) {
+    onOpenAuth,
+    conversations = [],
+    onOpenConversation,
+    onNewChat,           // ✅ add this
+    variant = "rail",
+  }) {
   const drawer = variant === "drawer";
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -50,6 +51,17 @@ export default function Sidebar({
     setThemeOpen(false);
   };
 
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        onNewChat?.();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onNewChat]);
+
   return (
     <aside
       aria-label="Primary"
@@ -71,8 +83,13 @@ export default function Sidebar({
 
       {/* Main nav */}
       <nav className="px-2 font-bold"> {/* <-- Changed from px-3 to px-2 */}
-        <RailItem icon={<RiAddLine />} label="New" expanded={drawer} />
-        <RailItem icon={<RiHome2Line />} label="Home" active expanded={drawer} />
+        <RailItem
+          icon={<RiAddLine />}
+          label="New"
+          expanded={drawer}
+          onClick={() => onNewChat?.()}  // ✅ call the prop, not resetChat
+        />
+        {/* <RailItem icon={<RiAddLine />} label="New" expanded={drawer} onClick={() => onNewChat?.()} /> */}
       </nav>
 
       {/* Expanded panels */}
@@ -169,7 +186,7 @@ export default function Sidebar({
 }
 
 /* ===== building blocks ===== */
-function RailItem({ icon, label, active = false, expanded = false }) {
+function RailItem({ icon, label, active = false, expanded = false, onClick }) {
  const labelCls = expanded
   ? "opacity-100 translate-x-0"
   : "opacity-0 translate-x-1 transition-all duration-300 group-hover/aside:opacity-100 group-hover/aside:translate-x-0";
@@ -177,6 +194,7 @@ function RailItem({ icon, label, active = false, expanded = false }) {
  return (
   <button
    type="button"
+   onClick={onClick}
    className={[
     "group/item flex w-full items-center gap-3 rounded-xl px-3 py-2", // <-- Changed from px-3 to px-2
     active ? "bg-bgp/60" : "hover:bg-bgp/40",
@@ -184,7 +202,7 @@ function RailItem({ icon, label, active = false, expanded = false }) {
    ].join(" ")}
   >
    <div className="grid size-10 place-items-center rounded-xl border border-borderc bg-bgs">
-    <span className="p- text-2xl opacity-90">{icon}</span>
+    <span className="text-2xl opacity-90">{icon}</span>
    </div>
    <span className={`text-sm text-textp ${labelCls}`}>{label}</span>
   </button>

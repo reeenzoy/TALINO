@@ -1,15 +1,29 @@
 import { useRef, useEffect } from 'react';
 import { FaStop } from 'react-icons/fa';
 
-export default function Composer({ 
-  value, 
-  onChange, 
-  onSubmit, 
-  isLoading, 
-  isGenerating, 
-  onStop 
+export default function Composer({
+  value,
+  onChange,
+  onSubmit,
+  isLoading = false,
+  isGenerating = false,
+  onStop,
+  autoFocus = false,
 }) {
   const ref = useRef(null);
+
+  // Focus textarea on mount / when autoFocus toggles
+  useEffect(() => {
+    if (!autoFocus || !ref.current) return;
+    // rAF ensures DOM is painted before focusing
+    requestAnimationFrame(() => {
+      try {
+        ref.current.focus({ preventScroll: true });
+        const len = ref.current.value?.length ?? 0;
+        ref.current.setSelectionRange?.(len, len);
+      } catch {}
+    });
+  }, [autoFocus]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -24,13 +38,15 @@ export default function Composer({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (!isLoading && value.trim()) onSubmit?.();
+        if (!isLoading && value.trim()) onSubmit?.(value.trim());
       }}
       aria-label="Message composer"
       className="mx-auto w-full max-w-3xl rounded-2xl bg-bgs p-3 shadow-lg border border-white/10 backdrop-blur-sm"
     >
       <textarea
+        id="composer"
         ref={ref}
+        autoFocus={autoFocus}
         rows={1}
         placeholder="Ask for DOST technologies, programs, or services"
         className="w-full resize-none bg-transparent text-base text-textp outline-none placeholder:text-texts leading-6 min-h-[24px] max-h-[120px]"
@@ -39,7 +55,7 @@ export default function Composer({
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            if (!isLoading && value.trim()) onSubmit?.();
+            if (!isLoading && value.trim()) onSubmit?.(value.trim());
           }
         }}
         disabled={isLoading}

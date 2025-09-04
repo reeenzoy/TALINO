@@ -10,7 +10,7 @@ export default function MessageList({
   onFeedback,
 }) {
   return (
-    <div className="mx-auto mt-6 flex w-full max-w-3xl flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-0 pb-2 scrollbar-none">
+    <div className="mx-auto mt-6 w-full max-w-3xl flex flex-col gap-4 px-0 pb-2">
       {items.map((msg, i) => {
         const isUser = msg.role === "user";
         const isAssistant = msg.role === "assistant";
@@ -42,7 +42,7 @@ export default function MessageList({
               </ReactMarkdown>
 
               {/* streaming indicator only when the message is being loaded (but not yet complete) */}
-              {isAssistant && msg.loading && (
+              {isAssistant && msg.loading && (!msg.content || msg.content.length === 0) && ( // only before streaming starts
                 <div className="mt-2 inline-flex items-center gap-2" aria-live="polite" aria-busy="true">
                   <LoadingDots />
                 </div>
