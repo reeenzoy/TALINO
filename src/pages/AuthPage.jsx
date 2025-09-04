@@ -1,10 +1,9 @@
-// src/pages/AuthPage.jsx
 import { useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 
 export default function AuthPage() {
   const { login, register } = useAuth();
-  const [mode, setMode] = useState("login"); // 'login' | 'register'
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [pwd, setPwd] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -28,12 +27,12 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="grid min-h-svh place-items-center bg-bgp text-textp">
+    <div className="grid min-h-svh place-items-center text-textp">
       <div className="w-full max-w-sm rounded-2xl border border-borderc bg-bgs p-6 shadow-card">
         {/* Brand */}
         <div className="mb-5 text-center">
-          <div className="mx-auto mb-3 grid size-12 place-items-center rounded-xl bg-bgp text-xl font-bold">
-            ✶
+          <div className="mx-auto mb-3 grid size-12 place-items-center rounded-xl text-xl font-bold">
+            <img src="/bot_logo.png" alt="TALINO AI Logo" className="h-full w-full object-contain" />
           </div>
           <h1 className="text-lg font-semibold">Welcome</h1>
           <p className="mt-1 text-sm text-texts">Sign in or create an account</p>

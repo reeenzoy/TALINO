@@ -29,7 +29,7 @@ export default function AuthedApp() {
   // chat state
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
-  const [sessionId, setSessionId] = useState(null);      // FastAPI memory key
+  const [sessionId, setSessionId] = useState(null); // FastAPI memory key
   const [isGenerating, setIsGenerating] = useState(false);
 
   // history state (DB)
@@ -45,10 +45,14 @@ export default function AuthedApp() {
 
   const abortRef = useRef(null);
   const streamIntervalRef = useRef(null);
+  const botIndexRef = useRef(-1);
 
   const { user, logout } = useAuth();
 
-  // theme
+  // ✅ mobile drawer — declare ONCE
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Theme
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "system");
   useEffect(() => {
     const root = document.documentElement;
@@ -63,7 +67,8 @@ export default function AuthedApp() {
     apply(theme);
     localStorage.setItem("theme", theme);
     const mq = matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e) => theme === "system" && root.setAttribute("data-theme", e.matches ? "dark" : "light");
+    const onChange = (e) =>
+      theme === "system" && root.setAttribute("data-theme", e.matches ? "dark" : "light");
     mq.addEventListener?.("change", onChange);
     return () => mq.removeEventListener?.("change", onChange);
   }, [theme]);
@@ -79,7 +84,8 @@ export default function AuthedApp() {
     setTimeout(() => sendMessage(), 10);
   };
 
-  const handleFeedback = (idx, value) => setFeedbacks((p) => ({ ...p, [idx]: value }));
+  const handleFeedback = (idx, value) =>
+    setFeedbacks((p) => ({ ...p, [idx]: value }));
 
   const fetchRecommendations = async (prompt) => {
     setRecLoading(true);
@@ -111,7 +117,15 @@ export default function AuthedApp() {
     })();
   }, [user]);
 
-  // --- HISTORY: ensure a conversation exists (create on first send)
+  // cleanup (abort streaming on unmount)
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      if (streamIntervalRef.current) clearInterval(streamIntervalRef.current);
+    };
+  }, []);
+
+  // --- ensure a conversation exists (create on first send)
   const ensureConversation = useCallback(
     async (titleSeed) => {
       if (conversationId) return conversationId;
@@ -135,24 +149,30 @@ export default function AuthedApp() {
     [conversationId, user]
   );
 
-  // --- HISTORY: open a conversation from the sidebar
+  // --- open a conversation from the sidebar
   const openConversation = useCallback(async (id) => {
     setConversationId(id);
     setSessionId(id); // align memory
     try {
       const { data } = await axios.get(`/api/app/conversations/${id}/messages`);
       const items = Array.isArray(data.items) ? data.items : [];
-      setMessages(items.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })));
+      setMessages(
+        items.map((m) => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: m.content,
+        }))
+      );
     } catch {
       setMessages([]);
     }
   }, []);
 
-  // fake streaming
+  // fake streaming (typing effect)
   const streamBotMessage = (fullMsg, botMsgIndex, onDone) => {
+    // keep loading: true; just clear content before typing
     setMessages((prev) => {
       const arr = [...prev];
-      if (arr[botMsgIndex]) arr[botMsgIndex] = { ...arr[botMsgIndex], loading: false, content: "" };
+      if (arr[botMsgIndex]) arr[botMsgIndex] = { ...arr[botMsgIndex], content: "" };
       return arr;
     });
 
@@ -185,12 +205,17 @@ export default function AuthedApp() {
     setHasInteracted(true);
     setIsGenerating(true);
 
-    // append user + placeholder bot
-    setMessages((prev) => [
-      ...prev,
-      { role: USER, content: prompt },
-      { role: BOT, content: "", loading: true, complete: false },
-    ]);
+    // append user + placeholder bot and capture the bot index safely
+    setMessages((prev) => {
+      const userIdx = prev.length;
+      const botIdx = userIdx + 1;
+      botIndexRef.current = botIdx;
+      return [
+        ...prev,
+        { role: USER, content: prompt },
+        { role: BOT, content: "", loading: true, complete: false },
+      ];
+    });
     setInput("");
 
     try {
@@ -211,13 +236,18 @@ export default function AuthedApp() {
 
       if (data?.session_id) setSessionId(data.session_id);
 
-      const botMsgIndex = messages.length + 1;
+      const botMsgIndex = botIndexRef.current;
 
       streamBotMessage(data?.output || "", botMsgIndex, async () => {
         setMessages((prev) => {
           const arr = [...prev];
           if (arr[botMsgIndex]) {
-            arr[botMsgIndex] = { ...arr[botMsgIndex], content: data?.output || "", complete: true };
+            arr[botMsgIndex] = {
+              ...arr[botMsgIndex],
+              content: data?.output || "",
+              loading: false,
+              complete: true,
+            };
           }
           return arr;
         });
@@ -243,21 +273,27 @@ export default function AuthedApp() {
         setIsGenerating(false);
       });
     } catch (err) {
-      const botMsgIndex = messages.length + 1;
+      const botMsgIndex = botIndexRef.current;
       const errorMessage =
         err?.name === "CanceledError"
           ? "Generation stopped."
           : err?.response?.data?.error || "Error: Could not reach backend.";
       setMessages((prev) => {
         const arr = [...prev];
-        if (arr[botMsgIndex]) arr[botMsgIndex] = { ...arr[botMsgIndex], content: errorMessage, loading: false, complete: true };
+        if (arr[botMsgIndex])
+          arr[botMsgIndex] = {
+            ...arr[botMsgIndex],
+            content: errorMessage,
+            loading: false,
+            complete: true,
+          };
         return arr;
       });
       setIsGenerating(false);
     } finally {
       abortRef.current = null;
     }
-  }, [input, isGenerating, messages.length, sessionId, user, conversationId, ensureConversation]);
+  }, [input, isGenerating, sessionId, user, conversationId, ensureConversation]);
 
   const handleStop = () => {
     abortRef.current?.abort();
@@ -280,62 +316,83 @@ export default function AuthedApp() {
   };
 
   const isWelcome = messages.filter((m) => m.role === USER).length === 0;
+  
+  // New state to manage the sidebar hover effect
+  const [sidebarWidth, setSidebarWidth] = useState("w-12");
+
+  // inside AuthedApp.jsx component
+  const resetChat = useCallback(() => {
+    setMessages([]);
+    setSessionId(null);
+    setConversationId(null);
+    setRecLoading(false);
+    setRelated([]);
+    setFeedbacks({});
+    setHasInteracted(false);
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>
-      <main className="min-h-svh bg-bgp text-textp">
-        <div className="flex">
+      <main className="min-h-svh bg-bgp text-textp flex">
+        {/* Sidebar container - Now fixed with hover events */}
+        <div
+          className={`fixed inset-y-0 left-0 z-20 hidden md:block transition-all duration-300 ${sidebarWidth}`}
+          onMouseEnter={() => setSidebarWidth("w-[260px]")}
+          onMouseLeave={() => setSidebarWidth("w-12")}
+        >
           <Sidebar
             onOpenAuth={() => setShowAuth(true)}
             conversations={conversations}
             onOpenConversation={openConversation}
           />
+        </div>
 
-          <div className="min-w-0 flex-1 flex flex-col">
-            <header className="sticky top-0 z-10 bg-bgp/60 backdrop-blur">
-              <div className="mx-auto flex h-14 w-full items-center justify-between px-4">
-                <div className="flex items-center gap-2 justify-start">
-                  <span className="text-xl font-semibold text-texts">TALINO</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {/* {user ? (
-                    <button
-                      onClick={logout}
-                      className="rounded-md border border-borderc bg-bgs px-2 py-1 text-sm text-textp hover:bg-bgs/60"
-                      title="Logout"
-                    >
-                      Logout
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setShowAuth(true)}
-                      className="rounded-md border border-borderc bg-bgs px-2 py-1 text-sm text-textp hover:bg-bgs/60"
-                      title="Login or Register"
-                    >
-                      Login / Register
-                    </button>
-                  )} */}
-                </div>
+        {/* Right column - dynamically adjust margin to accommodate sidebar width */}
+        <div className={`min-w-0 flex-1 min-h-svh flex flex-col transition-all duration-300 ${sidebarWidth === "w-[260px]" ? "md:ml-[260px]" : "md:ml-12"}`}>
+          {/* Header - Stays at the top of the main column */}
+          <header className="sticky top-0 z-10 bg-bgp h-14 w-full">
+            <div
+              className={`mx-auto flex h-full w-full items-center justify-between transition-all duration-300 ${
+                sidebarWidth === 'w-[260px]' ? 'px-4' : 'px-9'
+              }`}
+            >
+              <div className="flex items-center gap-2 justify-start">
+                {/* Burger — mobile only */}
+                <button
+                  type="button"
+                  className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-md border border-borderc bg-bgs text-textp"
+                  onClick={() => setMobileNavOpen(true)}
+                  aria-label="Open menu"
+                >
+                  <i className="fa-solid fa-bars" />
+                </button>
+                <span className="text-xl font-bold text-texts">TALINO</span>
               </div>
-            </header>
+              <div className="flex items-center gap-2">
+                {/* right actions (optional) */}
+              </div>
+            </div>
+          </header>
 
-            <section className="mx-auto grid w-full max-w-5xl flex-1 grid-rows-[1fr_auto] gap-4 px-4 pb-6">
-              <div className="flex justify-center w-full flex-1 px-4 items-start">
-                <div className={isWelcome ? "w-full max-w-3xl text-center" : "w-full max-w-none justify-end"}>
-                  {isWelcome ? (
-                    <>
-                      <div className="mb-6">
-                        <div className="mx-auto mb-2 inline-grid place-items-center">
-                          <div className="h-[80px] w-[80px] rounded-full flex items-center justify-center overflow-hidden">
-                            <img src="/logo.png" alt="TALINO AI Logo" className="h-full w-full object-contain" />
-                          </div>
-                        </div>
-                        <div className="text-xl font-bold text-textp">Welcome to TALINO.AI</div>
-                        <div className="mt-2 text-[1.05rem] font-medium italic text-accent">
-                          Science and Technology Within Everyone’s Reach
+          {/* The rest of the main content that should not move */}
+          <section className="mx-auto w-full max-w-5xl flex-1 min-h-0 px-4 pb-0 flex flex-col">
+            <div className="flex w-full flex-1 min-w-0 min-h-0 items-start justify-center px-4">
+              <div className={isWelcome ? "w-full max-w-3xl text-center" : "w-full max-w-none"}>
+                {isWelcome ? (
+                  <>
+                    <div className="mb-6">
+                      <div className="mx-auto mb-2 inline-grid place-items-center">
+                        <div className="h-[80px] w-[80px] rounded-full flex items-center justify-center overflow-hidden">
+                          <img src="/logo.png" alt="TALINO AI Logo" className="h-full w-full object-contain" />
                         </div>
                       </div>
-
+                      <div className="text-xl font-bold text-textp">Welcome to TALINO.AI</div>
+                      <div className="mt-2 text-[1.05rem] font-medium italic text-accent">
+                        Science and Technology Within Everyone's Reach
+                      </div>
+                    </div>
+                    {/* Centered composer on welcome screen */}
+                    <div className="mx-auto w-full max-w-3xl transition-all duration-300 ease-in-out">
                       <Composer
                         value={input}
                         onChange={setInput}
@@ -344,65 +401,73 @@ export default function AuthedApp() {
                         isGenerating={isGenerating}
                         onStop={handleStop}
                       />
-
-                      {!hasInteracted && <PromptChips items={suggestionButtons} onPick={pickPrompt} />}
-                    </>
-                  ) : (
-                    <MessageList
-                      items={messages}
-                      recLoading={recLoading}
-                      related={related}
-                      onPickRelated={(q) => {
-                        setInput(q);
-                        setTimeout(() => sendMessage(), 10);
-                      }}
-                      feedbacks={feedbacks}
-                      onFeedback={handleFeedback}
-                    />
-                  )}
-                </div>
-              </div>
-
-              {messages.length > 0 && (
-                <div className="mx-auto w-full composer-3xl">
-                  <Composer
-                    value={input}
-                    onChange={setInput}
-                    onSubmit={sendMessage}
-                    isLoading={false}
-                    isGenerating={isGenerating}
-                    onStop={handleStop}
-                  />
-                </div>
-              )}
-
-              {isWelcome && (
-                <footer>
-                  <div className="mx-auto w-full max-w-5xl px-4">
-                    <div className="flex flex-col items-center">
-                      <p className="text-sm text-texts">In partnership with</p>
-                      <div className="mt-2 flex gap-8">
-                        <div className="h-[60px] w-[60px]">
-                          <img src="/asti.png" alt="ASTI Logo" className="h-full w-full object-contain" />
-                        </div>
-                        <div className="h-[70px] w-[70px]">
-                          <img src="/csu.png" alt="CSU Logo" className="h-full w-full object-contain" />
-                        </div>
-                      </div>
                     </div>
-                  </div>
-                </footer>
-              )}
-            </section>
-          </div>
+                    {/* Suggestions under textarea */}
+                    {!hasInteracted && (
+                      <div className="mt-4">
+                        <PromptChips items={suggestionButtons} onPick={pickPrompt} />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <MessageList
+                    items={messages}
+                    recLoading={recLoading}
+                    related={related}
+                    onPickRelated={(q) => {
+                      setInput(q);
+                      setTimeout(() => sendMessage(), 10);
+                    }}
+                    feedbacks={feedbacks}
+                    onFeedback={(i, v) => setFeedbacks((p) => ({ ...p, [i]: v }))}
+                  />
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Fixed composer at bottom after first interaction */}
+          {!isWelcome && (
+            <div className={`fixed bottom-0 left-0 right-0 bg-bgp pb-6 px-4 transition-all duration-300 ${sidebarWidth === "w-[260px]" ? "md:left-[260px]" : "md:left-12"}`}>
+              <div className="mx-auto w-full max-w-3xl transition-all duration-300 ease-in-out">
+                <Composer
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={sendMessage}
+                  isLoading={false}
+                  isGenerating={isGenerating}
+                  onStop={handleStop}
+                />
+                <p className="mt-2 font-bold text-center text-xs text-texts">
+                  TALINO.AI can make mistakes. Check important information.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* mobile overlay */}
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setMobileNavOpen(false)} />
+            <div className="absolute left-0 top-0 h-full w-[260px] bg-bgs border-r border-borderc shadow-card">
+              <Sidebar
+                variant="drawer"                // <-- critical
+                onOpenAuth={() => { setShowAuth(true); setMobileNavOpen(false); }}
+                conversations={conversations}
+                onOpenConversation={(id) => { openConversation(id); setMobileNavOpen(false); }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Auth modal */}
         {!user && showAuth && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-            <div className="relative w-full max-w-sm">
+            <div className="relative w-full max-w-sm"> {/* <-- Add relative position here */}
               <button
                 onClick={() => setShowAuth(false)}
-                className="absolute -right-2 -top-2 rounded-full bg-bgs px-2 py-1 text-sm text-textp border border-borderc"
+                className="absolute -right-2 rounded-full bg-bgs px-2 py-1 text-sm text-textp border border-borderc"
                 aria-label="Close"
               >
                 ✕
