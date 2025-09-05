@@ -9,11 +9,13 @@ export default function MessageList({
   feedbacks,
   onFeedback,
 }) {
+
   return (
     <div className="mx-auto mt-6 w-full max-w-3xl flex flex-col gap-4 px-0 pb-2">
       {items.map((msg, i) => {
         const isUser = msg.role === "user";
         const isAssistant = msg.role === "assistant";
+        const isStreaming = isAssistant && msg.loading && !msg.complete;
         const isLast = i === items.length - 1;
         const fb = feedbacks?.[i];
 
@@ -27,22 +29,26 @@ export default function MessageList({
               }`}
             >
               {/* render content always */}
-              <ReactMarkdown
-                components={{
-                  h1: (p) => <h1 className="mb-2 mt-4 text-xl font-bold text-textp" {...p} />,
-                  h2: (p) => <h2 className="mb-2 mt-3 text-lg font-semibold text-textp" {...p} />,
-                  ul: (p) => <ul className="ml-6 list-disc text-textp" {...p} />,
-                  ol: (p) => <ol className="ml-6 list-decimal text-textp" {...p} />,
-                  li: (p) => <li className="mb-1 text-textp" {...p} />,
-                  strong: (p) => <strong className="font-bold text-textp" {...p} />,
-                  em: (p) => <em className="italic text-textp" {...p} />,
-                }}
-              >
-                {msg.content}
-              </ReactMarkdown>
+              {isStreaming ? (
+                <pre className="whitespace-pre-wrap break-words text-textp">{msg.content}</pre>
+              ) : (
+                <ReactMarkdown
+                  components={{
+                    h1: (p) => <h1 className="mb-2 mt-4 text-xl font-bold text-textp" {...p} />,
+                    h2: (p) => <h2 className="mb-2 mt-3 text-lg font-semibold text-textp" {...p} />,
+                    ul: (p) => <ul className="ml-6 list-disc text-textp" {...p} />,
+                    ol: (p) => <ol className="ml-6 list-decimal text-textp" {...p} />,
+                    li: (p) => <li className="mb-1 text-textp" {...p} />,
+                    strong: (p) => <strong className="font-bold text-textp" {...p} />,
+                    em: (p) => <em className="italic text-textp" {...p} />,
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              )}
 
               {/* streaming indicator only when the message is being loaded (but not yet complete) */}
-              {isAssistant && msg.loading && (!msg.content || msg.content.length === 0) && ( // only before streaming starts
+              {isAssistant && msg.loading && (!msg.content || msg.content.length === 0) && (
                 <div className="mt-2 inline-flex items-center gap-2" aria-live="polite" aria-busy="true">
                   <LoadingDots />
                 </div>
